@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import '../../../core/presentation/presenter.dart';
 import '../../../core/presentation/side_effect.dart';
 import '../../shared/data/http_sync_repository.dart';
-import '../../shared/domain/repositories/sync_repository.dart';
 import '../../shared/domain/repositories/transaction_repository.dart';
 import 'models/sync_state.dart';
 import 'sync_presenter.dart';
