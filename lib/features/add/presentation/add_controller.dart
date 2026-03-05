@@ -69,7 +69,7 @@ class AddController {
       final slug = slugify(name);
       final id = '$datePrefix-$slug-${_uuid.v4().substring(0, 4)}';
 
-      final tx = Transaction(
+      final tx = Transaction.create(
         id: id,
         date: date,
         retailer: retailer,

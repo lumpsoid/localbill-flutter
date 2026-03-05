@@ -35,9 +35,12 @@ class _SyncPageState extends State<SyncPage> {
   void _onEffect(SyncEffect effect) {
     if (!mounted) return;
     switch (effect) {
-      case SyncCompleteEffect(:final pushed, :final pulled):
+      case SyncCompleteEffect(:final pushed, :final pulled, :final conflicts):
+        final extra = conflicts > 0 ? ' ($conflicts conflict(s))' : '';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync done: $pushed pushed, $pulled pulled.')),
+          SnackBar(
+            content: Text('Sync done: $pushed pushed, $pulled pulled$extra.'),
+          ),
         );
       case SyncErrorEffect(:final message):
         ScaffoldMessenger.of(context).showSnackBar(
@@ -60,7 +63,7 @@ class _SyncPageState extends State<SyncPage> {
       valueListenable: _state,
       builder: (context, state, _) {
         final isSyncing = state.status == SyncStatus.syncing;
-        return Padding(
+        return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,7 +101,14 @@ class _SyncPageState extends State<SyncPage> {
                 ),
               if (state.status == SyncStatus.success) ...[
                 const SizedBox(height: 24),
-                _SyncResultCard(pushed: state.pushed, pulled: state.pulled),
+                _SyncResultCard(
+                  pushed: state.pushed,
+                  pulled: state.pulled,
+                ),
+                if (state.conflicts.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _ConflictList(conflicts: state.conflicts),
+                ],
               ],
               if (state.status == SyncStatus.error) ...[
                 const SizedBox(height: 16),
@@ -136,15 +146,11 @@ class _SyncResultCard extends StatelessWidget {
       color: theme.colorScheme.primaryContainer,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _Stat(label: 'Pushed', value: '$pushed'),
-                _Stat(label: 'Pulled', value: '$pulled'),
-              ],
-            ),
+            _Stat(label: 'Pushed', value: '$pushed'),
+            _Stat(label: 'Pulled', value: '$pulled'),
           ],
         ),
       ),
@@ -170,6 +176,143 @@ class _Stat extends StatelessWidget {
           ),
         ),
         Text(label, style: theme.textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+/// Displays the list of sync conflicts with details for user review.
+class _ConflictList extends StatelessWidget {
+  const _ConflictList({required this.conflicts});
+
+  final List<SyncConflict> conflicts;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: theme.colorScheme.error, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              '${conflicts.length} conflict(s) detected',
+              style: theme.textTheme.titleSmall?.copyWith(
+                color: theme.colorScheme.error,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'The following records have different core data on the server '
+          'and on this device. No data was overwritten. '
+          'Please investigate manually.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        ...conflicts.map((c) => _ConflictCard(conflict: c)),
+      ],
+    );
+  }
+}
+
+class _ConflictCard extends StatelessWidget {
+  const _ConflictCard({required this.conflict});
+
+  final SyncConflict conflict;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final client = conflict.clientVersion;
+    final server = conflict.serverVersion;
+
+    return Card(
+      color: theme.colorScheme.errorContainer,
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ID: ${conflict.id}',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(height: 4),
+            _ConflictRow(
+              label: 'Local',
+              name: client.name,
+              total: client.priceTotal,
+              currency: client.currency,
+              hash: client.coreHash,
+              color: theme.colorScheme.onErrorContainer,
+            ),
+            const Divider(height: 12),
+            _ConflictRow(
+              label: 'Server',
+              name: server.name,
+              total: server.priceTotal,
+              currency: server.currency,
+              hash: server.coreHash,
+              color: theme.colorScheme.onErrorContainer,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ConflictRow extends StatelessWidget {
+  const _ConflictRow({
+    required this.label,
+    required this.name,
+    required this.total,
+    required this.currency,
+    required this.hash,
+    required this.color,
+  });
+
+  final String label;
+  final String name;
+  final double total;
+  final String currency;
+  final String hash;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: color,
+            fontSize: 12,
+          ),
+        ),
+        Text(
+          '$name — $total $currency',
+          style: TextStyle(color: color),
+        ),
+        Text(
+          'hash: ${hash.substring(0, 16)}…',
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontFamily: 'monospace',
+          ),
+        ),
       ],
     );
   }

@@ -38,6 +38,9 @@ dependencies:
   # QR code scanner (uses native camera — Android CameraX, iOS AVFoundation)
   mobile_scanner: ^6.0.0
 
+  # Cryptographic hashing for transaction core-hash integrity
+  crypto: ^3.0.6
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

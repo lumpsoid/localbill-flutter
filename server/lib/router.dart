@@ -14,7 +14,7 @@ Router buildRouter(JsonStorage storage) {
   router.get('/health', (Request request) {
     return Response.ok(
       jsonEncode({'status': 'ok'}),
-      headers: _jsonHeaders,
+      headers: _json,
     );
   });
 
@@ -22,47 +22,121 @@ Router buildRouter(JsonStorage storage) {
 
   /// POST /sync
   ///
-  /// Body:   { "transactions": [ ...Transaction JSON... ] }
-  /// Response: { "new_transactions": [ ...Transaction JSON not known locally... ] }
+  /// Request:
+  /// ```json
+  /// { "last_seq": 42, "records": [...Transaction JSON...] }
+  /// ```
   ///
-  /// Strategy: last-write-wins by `id`. The server merges all client
-  /// transactions into its store and returns any server-only records.
+  /// Response:
+  /// ```json
+  /// {
+  ///   "accepted":    [{"id": "...", "seq": N}, ...],
+  ///   "conflicts":   [{"id": "...", "client_core_hash": "...",
+  ///                    "server_version": {...}}],
+  ///   "new_records": [...Transaction JSON with server_seq > last_seq...],
+  ///   "server_seq":  N
+  /// }
+  /// ```
+  ///
+  /// ## Algorithm
+  ///
+  /// For each client record:
+  ///   1. Not in server → Accept: assign next seq, save, add to accepted.
+  ///   2. In server, coreHash matches → Accept: merge envelope by updatedAt,
+  ///      keep existing seq, add to accepted.
+  ///   3. In server, coreHash differs → Conflict: log it, do NOT overwrite
+  ///      server record, add to conflicts response.
+  ///
+  /// new_records = server records where server_seq > last_seq
+  ///               AND id not in accepted (client already has them).
   router.post('/sync', (Request request) async {
     final body = await request.readAsString();
     final Map<String, dynamic> payload;
     try {
       payload = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}));
+      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}),
+          headers: _json);
     }
 
-    final clientList =
-        (payload['transactions'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final lastSeq = (payload['last_seq'] as num?)?.toInt() ?? 0;
+    final clientRecords =
+        (payload['records'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
     final serverMap = await storage.loadTransactions();
 
-    // Collect IDs the client already knows about.
-    final clientIds = <String>{};
-    for (final raw in clientList) {
-      final tx = ServerTransaction.fromJson(raw);
-      if (tx == null) continue;
-      clientIds.add(tx.id);
-      // Last-write-wins: always accept client version.
-      serverMap[tx.id] = tx;
+    final accepted = <Map<String, dynamic>>[];
+    final conflicts = <Map<String, dynamic>>[];
+    final acceptedIds = <String>{};
+
+    for (final raw in clientRecords) {
+      final client = ServerTransaction.fromJson(raw);
+      if (client == null) continue;
+
+      final existing = serverMap[client.id];
+
+      if (existing == null) {
+        // New record: accept and assign a sequence number.
+        final seq = await storage.nextSequence();
+        final saved = client.withSeq(seq);
+        serverMap[client.id] = saved;
+        accepted.add({'id': client.id, 'seq': seq});
+        acceptedIds.add(client.id);
+      } else if (existing.coreHash == null ||
+          existing.coreHash == client.coreHash) {
+        // Known record with matching core: merge envelope, re-acknowledge.
+        var merged = existing.mergeEnvelopeFrom(client);
+        // Assign seq if not yet assigned (shouldn't normally happen).
+        if (merged.seq == null) {
+          final seq = await storage.nextSequence();
+          merged = merged.withSeq(seq);
+        }
+        serverMap[client.id] = merged;
+        accepted.add({'id': client.id, 'seq': merged.seq});
+        acceptedIds.add(client.id);
+      } else {
+        // coreHash mismatch → conflict.
+        final conflict = {
+          'id': client.id,
+          'client_core_hash': client.coreHash,
+          'server_core_hash': existing.coreHash,
+          'server_version': existing.toJson(),
+          'detected_at': DateTime.now().toUtc().toIso8601String(),
+        };
+        conflicts.add({
+          'id': client.id,
+          'client_core_hash': client.coreHash,
+          'server_version': existing.toJson(),
+        });
+        // Log the full conflict for human review.
+        await storage.appendConflict(conflict);
+      }
     }
 
-    // Persist merged state.
+    // Persist updated server state.
     await storage.saveTransactions(serverMap);
 
-    // Return transactions the client does not yet have.
-    final newForClient = serverMap.values
-        .where((t) => !clientIds.contains(t.id))
+    // Collect records the client does not yet have: seq > last_seq and not
+    // in the set of records that were just accepted (client will update those
+    // from the accepted list).
+    final newRecords = serverMap.values
+        .where((t) {
+          final s = t.seq;
+          return s != null && s > lastSeq && !acceptedIds.contains(t.id);
+        })
         .map((t) => t.toJson())
         .toList();
 
+    final serverSeq = await storage.loadSequence();
+
     return Response.ok(
-      jsonEncode({'new_transactions': newForClient}),
-      headers: _jsonHeaders,
+      jsonEncode({
+        'accepted': accepted,
+        'conflicts': conflicts,
+        'new_records': newRecords,
+        'server_seq': serverSeq,
+      }),
+      headers: _json,
     );
   });
 
@@ -71,13 +145,10 @@ Router buildRouter(JsonStorage storage) {
   /// GET /queue → { "items": [ ...urls... ] }
   router.get('/queue', (Request request) async {
     final queue = await storage.loadQueue();
-    return Response.ok(
-      jsonEncode({'items': queue}),
-      headers: _jsonHeaders,
-    );
+    return Response.ok(jsonEncode({'items': queue}), headers: _json);
   });
 
-  /// POST /queue → add URLs to the queue
+  /// POST /queue — add URLs to the queue
   /// Body: { "items": [ ...urls... ] }  or  { "item": "url" }
   router.post('/queue', (Request request) async {
     final body = await request.readAsString();
@@ -85,7 +156,8 @@ Router buildRouter(JsonStorage storage) {
     try {
       payload = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}));
+      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}),
+          headers: _json);
     }
 
     final queue = await storage.loadQueue();
@@ -102,10 +174,7 @@ Router buildRouter(JsonStorage storage) {
     }
 
     await storage.saveQueue(queue);
-    return Response.ok(
-      jsonEncode({'queued': queue.length}),
-      headers: _jsonHeaders,
-    );
+    return Response.ok(jsonEncode({'queued': queue.length}), headers: _json);
   });
 
   /// DELETE /queue — remove successfully-processed items
@@ -116,7 +185,8 @@ Router buildRouter(JsonStorage storage) {
     try {
       payload = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}));
+      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}),
+          headers: _json);
     }
 
     final toRemove = Set<String>.from(
@@ -128,7 +198,7 @@ Router buildRouter(JsonStorage storage) {
 
     return Response.ok(
       jsonEncode({'removed': toRemove.length, 'remaining': remaining.length}),
-      headers: _jsonHeaders,
+      headers: _json,
     );
   });
 
@@ -139,7 +209,7 @@ Router buildRouter(JsonStorage storage) {
     final txs = await storage.loadTransactions();
     return Response.ok(
       jsonEncode({'transactions': txs.values.map((t) => t.toJson()).toList()}),
-      headers: _jsonHeaders,
+      headers: _json,
     );
   });
 
@@ -150,25 +220,22 @@ Router buildRouter(JsonStorage storage) {
     try {
       raw = jsonDecode(body) as Map<String, dynamic>;
     } catch (_) {
-      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}));
+      return Response(400, body: jsonEncode({'error': 'Invalid JSON'}),
+          headers: _json);
     }
 
     final tx = ServerTransaction.fromJson(raw);
     if (tx == null) {
-      return Response(
-        400,
-        body: jsonEncode({'error': 'Missing or invalid "id" field'}),
-      );
+      return Response(400,
+          body: jsonEncode({'error': 'Missing or invalid "id" field'}),
+          headers: _json);
     }
 
     final txs = await storage.loadTransactions();
     txs[tx.id] = tx;
     await storage.saveTransactions(txs);
 
-    return Response.ok(
-      jsonEncode({'saved': tx.id}),
-      headers: _jsonHeaders,
-    );
+    return Response.ok(jsonEncode({'saved': tx.id}), headers: _json);
   });
 
   /// DELETE /transactions/<id>
@@ -180,11 +247,20 @@ Router buildRouter(JsonStorage storage) {
 
     return Response.ok(
       jsonEncode({'deleted': id, 'existed': existed}),
-      headers: _jsonHeaders,
+      headers: _json,
+    );
+  });
+
+  /// GET /conflicts — list all detected conflicts for human review
+  router.get('/conflicts', (Request request) async {
+    final conflicts = await storage.loadConflicts();
+    return Response.ok(
+      jsonEncode({'conflicts': conflicts}),
+      headers: _json,
     );
   });
 
   return router;
 }
 
-const _jsonHeaders = {'content-type': 'application/json'};
+const _json = {'content-type': 'application/json'};

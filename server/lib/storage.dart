@@ -5,8 +5,11 @@ import 'models.dart';
 
 /// Simple file-backed JSON storage.
 ///
-/// Transactions are stored in `data/transactions.json` and the queue in
-/// `data/queue.json`, relative to the current working directory.
+/// Layout under [dataDir]:
+///   transactions.json  — list of all transaction JSON objects
+///   queue.json         — list of queued URLs
+///   seq.txt            — current sequence counter (integer)
+///   conflicts.json     — list of conflict records for human review
 class JsonStorage {
   JsonStorage({String dataDir = 'data'}) : _dataDir = dataDir;
 
@@ -14,6 +17,8 @@ class JsonStorage {
 
   File get _txFile => File('$_dataDir/transactions.json');
   File get _queueFile => File('$_dataDir/queue.json');
+  File get _seqFile => File('$_dataDir/seq.txt');
+  File get _conflictsFile => File('$_dataDir/conflicts.json');
 
   Future<void> _ensureDir() async {
     await Directory(_dataDir).create(recursive: true);
@@ -42,6 +47,52 @@ class JsonStorage {
     await _ensureDir();
     final list = txs.values.map((t) => t.toJson()).toList();
     await _txFile.writeAsString(jsonEncode(list));
+  }
+
+  // ── Sequence counter ──────────────────────────────────────────────────────
+
+  /// Returns the current sequence counter (0 if file does not exist).
+  Future<int> loadSequence() async {
+    await _ensureDir();
+    if (!await _seqFile.exists()) return 0;
+    try {
+      return int.parse((await _seqFile.readAsString()).trim());
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Atomically increments the counter and returns the new value.
+  Future<int> nextSequence() async {
+    final current = await loadSequence();
+    final next = current + 1;
+    await _seqFile.writeAsString('$next');
+    return next;
+  }
+
+  /// Overwrites the counter. Use with care.
+  Future<void> saveSequence(int seq) async {
+    await _ensureDir();
+    await _seqFile.writeAsString('$seq');
+  }
+
+  // ── Conflict log ──────────────────────────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> loadConflicts() async {
+    await _ensureDir();
+    if (!await _conflictsFile.exists()) return [];
+    try {
+      return (jsonDecode(await _conflictsFile.readAsString()) as List<dynamic>)
+          .cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> appendConflict(Map<String, dynamic> conflict) async {
+    final existing = await loadConflicts();
+    existing.add(conflict);
+    await _conflictsFile.writeAsString(jsonEncode(existing));
   }
 
   // ── Queue ─────────────────────────────────────────────────────────────────
