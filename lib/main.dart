@@ -1,122 +1,182 @@
 import 'package:flutter/material.dart';
 
+import 'features/add/presentation/add_controller.dart';
+import 'features/add/presentation/add_page.dart';
+import 'features/insert/presentation/insert_controller.dart';
+import 'features/insert/presentation/insert_page.dart';
+import 'features/queue/presentation/queue_controller.dart';
+import 'features/queue/presentation/queue_page.dart';
+import 'features/report/presentation/report_controller.dart';
+import 'features/report/presentation/report_page.dart';
+import 'features/search/presentation/search_controller.dart';
+import 'features/search/presentation/search_page.dart';
+import 'features/shared/data/local_queue_repository.dart';
+import 'features/shared/data/local_transaction_repository.dart';
+import 'features/sync/presentation/sync_controller.dart';
+import 'features/sync/presentation/sync_page.dart';
+import 'features/transactions/presentation/transactions_controller.dart';
+import 'features/transactions/presentation/transactions_page.dart';
+
 void main() {
-  runApp(const MyApp());
+  runApp(const LocalBillApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class LocalBillApp extends StatelessWidget {
+  const LocalBillApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'LocalBill',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        colorSchemeSeed: Colors.indigo,
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const _CompositionRoot(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+/// Composition root: creates repositories and controllers, then renders the
+/// main shell. This is the single place where dependencies are wired together.
+class _CompositionRoot extends StatefulWidget {
+  const _CompositionRoot();
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<_CompositionRoot> createState() => _CompositionRootState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _CompositionRootState extends State<_CompositionRoot> {
+  // ── Repositories (shared singletons) ────────────────────────────────────
+  final _txRepo = LocalTransactionRepository();
+  final _queueRepo = LocalQueueRepository();
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
+  // ── Controllers (created once, reused across tabs) ───────────────────────
+  late final TransactionsController _transactionsCtrl;
+  late final InsertController _insertCtrl;
+  late final QueueController _queueCtrl;
+  late final ReportController _reportCtrl;
+  late final SearchController _searchCtrl;
+  late final AddController _addCtrl;
+  late final SyncController _syncCtrl;
+
+  int _selectedIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _transactionsCtrl = TransactionsController(transactionRepository: _txRepo);
+    _insertCtrl = InsertController(
+      transactionRepository: _txRepo,
+      queueRepository: _queueRepo,
+    );
+    _queueCtrl = QueueController(
+      queueRepository: _queueRepo,
+      transactionRepository: _txRepo,
+    );
+    _reportCtrl = ReportController(transactionRepository: _txRepo);
+    _searchCtrl = SearchController(transactionRepository: _txRepo);
+    _addCtrl = AddController(transactionRepository: _txRepo);
+    _syncCtrl = SyncController(
+      transactionRepository: _txRepo,
+      initialServerUrl: 'http://192.168.1.2:8080',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
+    final pages = <_TabPage>[
+      _TabPage(
+        label: 'Transactions',
+        icon: Icons.receipt_long_outlined,
+        activeIcon: Icons.receipt_long,
+        child: TransactionsPage(controller: _transactionsCtrl),
+      ),
+      _TabPage(
+        label: 'Insert',
+        icon: Icons.add_link_outlined,
+        activeIcon: Icons.add_link,
+        child: InsertPage(controller: _insertCtrl),
+      ),
+      _TabPage(
+        label: 'Add',
+        icon: Icons.edit_note_outlined,
+        activeIcon: Icons.edit_note,
+        child: AddPage(controller: _addCtrl),
+      ),
+      _TabPage(
+        label: 'Queue',
+        icon: Icons.queue_outlined,
+        activeIcon: Icons.queue,
+        child: QueuePage(controller: _queueCtrl),
+      ),
+      _TabPage(
+        label: 'Report',
+        icon: Icons.bar_chart_outlined,
+        activeIcon: Icons.bar_chart,
+        child: ReportPage(controller: _reportCtrl),
+      ),
+      _TabPage(
+        label: 'Search',
+        icon: Icons.search_outlined,
+        activeIcon: Icons.search,
+        child: SearchPage(controller: _searchCtrl),
+      ),
+      _TabPage(
+        label: 'Sync',
+        icon: Icons.sync_outlined,
+        activeIcon: Icons.sync,
+        child: SyncPage(controller: _syncCtrl),
+      ),
+    ];
+
+    final current = pages[_selectedIndex];
+
     return Scaffold(
       appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+        title: Text(current.label),
+        centerTitle: false,
+        actions: [
+          if (_selectedIndex == 0)
+            IconButton(
+              icon: const Icon(Icons.refresh_outlined),
+              tooltip: 'Refresh',
+              onPressed: _transactionsCtrl.loadTransactions,
             ),
-          ],
-        ),
+        ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+      body: IndexedStack(
+        index: _selectedIndex,
+        children: pages.map((p) => p.child).toList(),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _selectedIndex,
+        onDestinationSelected: (i) => setState(() => _selectedIndex = i),
+        destinations: pages
+            .map(
+              (p) => NavigationDestination(
+                icon: Icon(p.icon),
+                selectedIcon: Icon(p.activeIcon),
+                label: p.label,
+              ),
+            )
+            .toList(),
       ),
     );
   }
+}
+
+class _TabPage {
+  const _TabPage({
+    required this.label,
+    required this.icon,
+    required this.activeIcon,
+    required this.child,
+  });
+
+  final String label;
+  final IconData icon;
+  final IconData activeIcon;
+  final Widget child;
 }
