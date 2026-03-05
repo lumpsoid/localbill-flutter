@@ -17,13 +17,13 @@ class ReportPresenter extends Presenter<ReportState> {
     for (final t in transactions) {
       if (t.date.length < 7) continue;
       final ym = t.date.substring(0, 7);
-      totals.putIfAbsent(ym, _Acc.new)
-        ..total += t.priceTotal
-        ..count++;
+      final acc = totals.putIfAbsent(ym, _Acc.new);
+      acc.total += t.priceTotal;
+      acc.count++;
     }
 
-    final sorted = totals.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final sorted =
+        totals.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
 
     final rows = IList(
       sorted.map(

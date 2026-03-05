@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide SearchController;
 
 import 'features/add/presentation/add_controller.dart';
 import 'features/add/presentation/add_page.dart';

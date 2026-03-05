@@ -92,7 +92,7 @@ class QueueController {
           final datePrefix = compactDate(invoice.date);
           final slug = slugify(item.name);
           final id = '$datePrefix-$slug-${_uuid.v4().substring(0, 4)}';
-          final tx = Transaction(
+          final tx = Transaction.create(
             id: id,
             date: invoice.date,
             retailer: invoice.retailer,

@@ -91,33 +91,32 @@ class Transaction {
     String? link,
     IList<String> tags = const IListConst([]),
     String? notes,
-  }) =>
-      Transaction(
-        id: id,
-        date: date,
-        retailer: retailer,
-        name: name,
-        quantity: quantity,
-        unitPrice: unitPrice,
-        priceTotal: priceTotal,
-        currency: currency,
-        country: country,
-        link: link,
-        coreHash: computeCoreHash(
-          date: date,
-          retailer: retailer,
-          name: name,
-          quantity: quantity,
-          unitPrice: unitPrice,
-          priceTotal: priceTotal,
-          currency: currency,
-          country: country,
-          link: link,
-        ),
-        updatedAt: DateTime.now().toUtc().toIso8601String(),
-        tags: tags,
-        notes: notes,
-      );
+  }) => Transaction(
+    id: id,
+    date: date,
+    retailer: retailer,
+    name: name,
+    quantity: quantity,
+    unitPrice: unitPrice,
+    priceTotal: priceTotal,
+    currency: currency,
+    country: country,
+    link: link,
+    coreHash: computeCoreHash(
+      date: date,
+      retailer: retailer,
+      name: name,
+      quantity: quantity,
+      unitPrice: unitPrice,
+      priceTotal: priceTotal,
+      currency: currency,
+      country: country,
+      link: link,
+    ),
+    updatedAt: DateTime.now().toUtc().toIso8601String(),
+    tags: tags,
+    notes: notes,
+  );
 
   // ── Core-hash computation ─────────────────────────────────────────────────
 
@@ -135,9 +134,15 @@ class Transaction {
     String? link,
   }) {
     final input = [
-      date, retailer, name,
-      quantity.toString(), unitPrice.toString(), priceTotal.toString(),
-      currency, country, link ?? '',
+      date,
+      retailer,
+      name,
+      quantity.toString(),
+      unitPrice.toString(),
+      priceTotal.toString(),
+      currency,
+      country,
+      link ?? '',
     ].join('\x00');
     return sha256.convert(utf8.encode(input)).toString();
   }
@@ -155,9 +160,10 @@ class Transaction {
       tags: tags ?? this.tags,
       notes: notes ?? this.notes,
       deleted: nowDeleted,
-      deletedAt: (nowDeleted && deletedAt == null)
-          ? DateTime.now().toUtc().toIso8601String()
-          : deletedAt,
+      deletedAt:
+          (nowDeleted && deletedAt == null)
+              ? DateTime.now().toUtc().toIso8601String()
+              : deletedAt,
       updatedAt: DateTime.now().toUtc().toIso8601String(),
     );
   }
@@ -196,11 +202,18 @@ class Transaction {
     final link = json['link'] as String?;
 
     // Backwards-compat: compute hash when loading pre-migration files.
-    final coreHash = json['core_hash'] as String? ??
+    final coreHash =
+        json['core_hash'] as String? ??
         computeCoreHash(
-          date: date, retailer: retailer, name: name,
-          quantity: quantity, unitPrice: unitPrice, priceTotal: priceTotal,
-          currency: currency, country: country, link: link,
+          date: date,
+          retailer: retailer,
+          name: name,
+          quantity: quantity,
+          unitPrice: unitPrice,
+          priceTotal: priceTotal,
+          currency: currency,
+          country: country,
+          link: link,
         );
 
     return Transaction(
@@ -217,9 +230,8 @@ class Transaction {
       coreHash: coreHash,
       // Old files have no updated_at; use min-date sentinel so the server
       // version always wins in envelope conflicts.
-      updatedAt:
-          json['updated_at'] as String? ?? '0001-01-01T00:00:00.000Z',
-      tags: IList<String>.from(
+      updatedAt: json['updated_at'] as String? ?? '0001-01-01T00:00:00.000Z',
+      tags: IList<String>(
         (json['tags'] as List<dynamic>? ?? []).cast<String>(),
       ),
       notes: json['notes'] as String?,
@@ -249,26 +261,25 @@ class Transaction {
     int? serverSeq,
     bool? deleted,
     String? deletedAt,
-  }) =>
-      Transaction(
-        id: id ?? this.id,
-        date: date ?? this.date,
-        retailer: retailer ?? this.retailer,
-        name: name ?? this.name,
-        quantity: quantity ?? this.quantity,
-        unitPrice: unitPrice ?? this.unitPrice,
-        priceTotal: priceTotal ?? this.priceTotal,
-        currency: currency ?? this.currency,
-        country: country ?? this.country,
-        link: link ?? this.link,
-        coreHash: coreHash ?? this.coreHash,
-        updatedAt: updatedAt ?? this.updatedAt,
-        tags: tags ?? this.tags,
-        notes: notes ?? this.notes,
-        serverSeq: serverSeq ?? this.serverSeq,
-        deleted: deleted ?? this.deleted,
-        deletedAt: deletedAt ?? this.deletedAt,
-      );
+  }) => Transaction(
+    id: id ?? this.id,
+    date: date ?? this.date,
+    retailer: retailer ?? this.retailer,
+    name: name ?? this.name,
+    quantity: quantity ?? this.quantity,
+    unitPrice: unitPrice ?? this.unitPrice,
+    priceTotal: priceTotal ?? this.priceTotal,
+    currency: currency ?? this.currency,
+    country: country ?? this.country,
+    link: link ?? this.link,
+    coreHash: coreHash ?? this.coreHash,
+    updatedAt: updatedAt ?? this.updatedAt,
+    tags: tags ?? this.tags,
+    notes: notes ?? this.notes,
+    serverSeq: serverSeq ?? this.serverSeq,
+    deleted: deleted ?? this.deleted,
+    deletedAt: deletedAt ?? this.deletedAt,
+  );
 
   @override
   bool operator ==(Object other) =>
