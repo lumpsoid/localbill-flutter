@@ -20,6 +20,7 @@ class _SyncPageState extends State<SyncPage> {
   void initState() {
     super.initState();
     _state = ValueNotifier(const SyncState());
+    _serverUrlCtrl = TextEditingController(text: _state.value.serverUrl);
     widget.controller.onViewAttach(
       updater: (s) {
         _state.value = s;
@@ -29,7 +30,6 @@ class _SyncPageState extends State<SyncPage> {
       },
       pusher: _onEffect,
     );
-    _serverUrlCtrl = TextEditingController(text: _state.value.serverUrl);
   }
 
   void _onEffect(SyncEffect effect) {
@@ -43,9 +43,9 @@ class _SyncPageState extends State<SyncPage> {
           ),
         );
       case SyncErrorEffect(:final message):
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sync error: $message')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Sync error: $message')));
     }
   }
 
@@ -101,10 +101,7 @@ class _SyncPageState extends State<SyncPage> {
                 ),
               if (state.status == SyncStatus.success) ...[
                 const SizedBox(height: 24),
-                _SyncResultCard(
-                  pushed: state.pushed,
-                  pulled: state.pulled,
-                ),
+                _SyncResultCard(pushed: state.pushed, pulled: state.pulled),
                 if (state.conflicts.isNotEmpty) ...[
                   const SizedBox(height: 16),
                   _ConflictList(conflicts: state.conflicts),
@@ -195,8 +192,11 @@ class _ConflictList extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
-                color: theme.colorScheme.error, size: 20),
+            Icon(
+              Icons.warning_amber_rounded,
+              color: theme.colorScheme.error,
+              size: 20,
+            ),
             const SizedBox(width: 8),
             Text(
               '${conflicts.length} conflict(s) detected',
@@ -301,17 +301,10 @@ class _ConflictRow extends StatelessWidget {
             fontSize: 12,
           ),
         ),
-        Text(
-          '$name — $total $currency',
-          style: TextStyle(color: color),
-        ),
+        Text('$name — $total $currency', style: TextStyle(color: color)),
         Text(
           'hash: ${hash.substring(0, 16)}…',
-          style: TextStyle(
-            color: color,
-            fontSize: 11,
-            fontFamily: 'monospace',
-          ),
+          style: TextStyle(color: color, fontSize: 11, fontFamily: 'monospace'),
         ),
       ],
     );
