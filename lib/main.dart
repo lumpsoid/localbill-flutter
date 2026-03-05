@@ -30,10 +30,7 @@ class LocalBillApp extends StatelessWidget {
     return MaterialApp(
       title: 'LocalBill',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
-        useMaterial3: true,
-      ),
+      theme: ThemeData(colorSchemeSeed: Colors.indigo, useMaterial3: true),
       home: const _CompositionRoot(),
     );
   }
@@ -79,10 +76,11 @@ class _CompositionRootState extends State<_CompositionRoot> {
     _reportCtrl = ReportController(transactionRepository: _txRepo);
     _searchCtrl = SearchController(transactionRepository: _txRepo);
     _addCtrl = AddController(transactionRepository: _txRepo);
+    final initUrl = 'http://192.168.1.2:8080';
     _syncCtrl = SyncController(
       transactionRepository: _txRepo,
-      initialServerUrl: 'http://192.168.1.2:8080',
-      syncRepositoryFactory: (url) => HttpSyncRepository(serverUrl: url),
+      initialServerUrl: initUrl,
+      syncRepository: HttpSyncRepository(serverUrl: initUrl),
     );
   }
 
@@ -155,15 +153,16 @@ class _CompositionRootState extends State<_CompositionRoot> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (i) => setState(() => _selectedIndex = i),
-        destinations: pages
-            .map(
-              (p) => NavigationDestination(
-                icon: Icon(p.icon),
-                selectedIcon: Icon(p.activeIcon),
-                label: p.label,
-              ),
-            )
-            .toList(),
+        destinations:
+            pages
+                .map(
+                  (p) => NavigationDestination(
+                    icon: Icon(p.icon),
+                    selectedIcon: Icon(p.activeIcon),
+                    label: p.label,
+                  ),
+                )
+                .toList(),
       ),
     );
   }

@@ -34,7 +34,7 @@ import '../domain/repositories/sync_repository.dart';
 class HttpSyncRepository implements SyncRepository {
   HttpSyncRepository({required this.serverUrl});
 
-  final String serverUrl;
+  String serverUrl;
 
   @override
   Future<SyncResult> sync({
@@ -76,17 +76,18 @@ class HttpSyncRepository implements SyncRepository {
       if (id == null || serverVersionRaw == null) continue;
 
       // Find matching client version from the unacknowledged list.
-      final clientVersion =
-          unacknowledged.where((t) => t.id == id).firstOrNull;
+      final clientVersion = unacknowledged.where((t) => t.id == id).firstOrNull;
       if (clientVersion == null) continue;
 
       try {
         final serverVersion = Transaction.fromJson(serverVersionRaw);
-        conflicts.add(SyncConflict(
-          id: id,
-          clientVersion: clientVersion,
-          serverVersion: serverVersion,
-        ));
+        conflicts.add(
+          SyncConflict(
+            id: id,
+            clientVersion: clientVersion,
+            serverVersion: serverVersion,
+          ),
+        );
       } catch (_) {
         // Skip malformed conflict payload.
       }
@@ -96,8 +97,7 @@ class HttpSyncRepository implements SyncRepository {
     final newTransactions = <Transaction>[];
     for (final item in (body['new_records'] as List<dynamic>? ?? [])) {
       try {
-        newTransactions
-            .add(Transaction.fromJson(item as Map<String, dynamic>));
+        newTransactions.add(Transaction.fromJson(item as Map<String, dynamic>));
       } catch (_) {
         // Skip malformed record.
       }
@@ -128,15 +128,21 @@ class HttpSyncRepository implements SyncRepository {
 
   @override
   Future<void> removeFromRemoteQueue(List<String> urls) async {
-    final request = http.Request('DELETE', Uri.parse('$serverUrl/queue'))
-      ..headers['Content-Type'] = 'application/json'
-      ..body = jsonEncode({'items': urls});
+    final request =
+        http.Request('DELETE', Uri.parse('$serverUrl/queue'))
+          ..headers['Content-Type'] = 'application/json'
+          ..body = jsonEncode({'items': urls});
     final streamed = await request.send();
     if (streamed.statusCode != 200) {
       throw SyncException(
         'Remove from remote queue failed: HTTP ${streamed.statusCode}',
       );
     }
+  }
+
+  @override
+  void setServerUrl(String url) {
+    serverUrl = url;
   }
 }
 

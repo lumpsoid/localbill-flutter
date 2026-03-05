@@ -33,22 +33,20 @@ class SyncController {
   SyncController({
     required TransactionRepository transactionRepository,
     required String initialServerUrl,
-    required SyncRepository Function(String url) syncRepositoryFactory,
+    required SyncRepository syncRepository,
     SyncPresenter? presenter,
     SideEffector<SyncEffect>? effectPusher,
   }) : _txRepo = transactionRepository,
-       _syncRepositoryFactory = syncRepositoryFactory,
        _presenter = presenter ?? SyncPresenter(),
        _effectPusher = effectPusher ?? SideEffector<SyncEffect>(),
        _serverUrl = initialServerUrl,
-       _syncRepo = syncRepositoryFactory(initialServerUrl);
+       _syncRepo = syncRepository;
 
+  final SyncRepository _syncRepo;
   final TransactionRepository _txRepo;
-  final SyncRepository Function(String url) _syncRepositoryFactory;
   final SyncPresenter _presenter;
   final SideEffector<SyncEffect> _effectPusher;
   String _serverUrl;
-  SyncRepository _syncRepo;
 
   void onViewAttach({
     required StateUpdater<SyncState> updater,
@@ -66,7 +64,7 @@ class SyncController {
 
   void onServerUrlChanged(String url) {
     _serverUrl = url;
-    _syncRepo = _syncRepositoryFactory(url);
+    _syncRepo.setServerUrl(url);
     _presenter.setServerUrl(url);
   }
 
@@ -124,11 +122,13 @@ class SyncController {
             // Server envelope is newer: apply server envelope but keep local
             // core fields (they are identical since coreHash matched).
             await _txRepo.save(
-              existing.withEnvelope(
-                tags: serverTx.tags,
-                notes: serverTx.notes,
-                deleted: serverTx.deleted,
-              ).copyWith(serverSeq: serverTx.serverSeq),
+              existing
+                  .withEnvelope(
+                    tags: serverTx.tags,
+                    notes: serverTx.notes,
+                    deleted: serverTx.deleted,
+                  )
+                  .copyWith(serverSeq: serverTx.serverSeq),
             );
           } else if (serverTx.serverSeq != null) {
             // Just stamp the serverSeq we received.
@@ -145,11 +145,13 @@ class SyncController {
       }
 
       _presenter.setSuccess(result);
-      _effectPusher.push(SyncCompleteEffect(
-        pushed: result.pushed,
-        pulled: result.pulled,
-        conflicts: result.conflicts.length,
-      ));
+      _effectPusher.push(
+        SyncCompleteEffect(
+          pushed: result.pushed,
+          pulled: result.pulled,
+          conflicts: result.conflicts.length,
+        ),
+      );
     } on Object catch (e, trace) {
       debugPrint('SyncController.onSync error: $e\n$trace');
       final msg = e.toString();

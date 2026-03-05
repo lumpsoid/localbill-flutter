@@ -49,6 +49,7 @@ class SyncResult {
 }
 
 abstract interface class SyncRepository {
+  void setServerUrl(String url);
   /// Performs a delta sync with the server.
   ///
   /// [unacknowledged] — transactions where [Transaction.serverSeq] is null
