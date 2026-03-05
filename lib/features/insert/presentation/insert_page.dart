@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../scanner/presentation/scanner_page.dart';
 import 'insert_controller.dart';
 import 'models/insert_side_effects.dart';
 import 'models/insert_state.dart';
@@ -78,6 +79,16 @@ class _InsertPageState extends State<InsertPage> {
     );
   }
 
+  /// Open the QR scanner and, if a URL is returned, fill the text field and
+  /// immediately start parsing the invoice.
+  Future<void> _scanQr() async {
+    final url = await Navigator.of(context).push<String>(ScannerPage.route());
+    if (url == null || url.isEmpty) return;
+    _urlController.text = url;
+    // Auto-insert once the URL is scanned.
+    widget.controller.onInsertUrl(url, force: _force);
+  }
+
   @override
   void dispose() {
     widget.controller.onViewDetach();
@@ -98,10 +109,36 @@ class _InsertPageState extends State<InsertPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Text(
-                'Paste a Serbian fiscal invoice URL to parse and save it.',
+                'Scan the QR code on your invoice or paste the URL manually.',
                 style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 16),
+              // QR scan button — prominent, full-width
+              OutlinedButton.icon(
+                onPressed: isParsing ? null : _scanQr,
+                icon: const Icon(Icons.qr_code_scanner),
+                label: const Text('Scan invoice QR code'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Expanded(child: Divider()),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'or paste URL',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).colorScheme.outline,
+                          ),
+                    ),
+                  ),
+                  const Expanded(child: Divider()),
+                ],
+              ),
+              const SizedBox(height: 12),
               TextField(
                 controller: _urlController,
                 enabled: !isParsing,

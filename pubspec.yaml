@@ -35,6 +35,9 @@ dependencies:
   # Unique IDs for transactions
   uuid: ^4.4.0
 
+  # QR code scanner (uses native camera — Android CameraX, iOS AVFoundation)
+  mobile_scanner: ^6.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
