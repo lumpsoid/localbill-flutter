@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/presentation/presenter.dart';
 import '../../../core/presentation/side_effect.dart';
-import '../../shared/data/http_sync_repository.dart';
+import '../../shared/domain/repositories/sync_repository.dart';
 import '../../shared/domain/repositories/transaction_repository.dart';
 import 'models/sync_state.dart';
 import 'sync_presenter.dart';
@@ -33,14 +33,17 @@ class SyncController {
   SyncController({
     required TransactionRepository transactionRepository,
     required String initialServerUrl,
+    required SyncRepository Function(String url) syncRepositoryFactory,
     SyncPresenter? presenter,
     SideEffector<SyncEffect>? effectPusher,
   }) : _txRepo = transactionRepository,
+       _syncRepositoryFactory = syncRepositoryFactory,
        _presenter = presenter ?? SyncPresenter(),
        _effectPusher = effectPusher ?? SideEffector<SyncEffect>(),
        _serverUrl = initialServerUrl;
 
   final TransactionRepository _txRepo;
+  final SyncRepository Function(String url) _syncRepositoryFactory;
   final SyncPresenter _presenter;
   final SideEffector<SyncEffect> _effectPusher;
   String _serverUrl;
@@ -84,7 +87,7 @@ class SyncController {
       // The highest seq we have already integrated from the server.
       final lastSeq = await _txRepo.loadLastSeq();
 
-      final repo = HttpSyncRepository(serverUrl: _serverUrl.trim());
+      final repo = _syncRepositoryFactory(_serverUrl.trim());
       final result = await repo.sync(
         unacknowledged: unacknowledged,
         lastSeq: lastSeq,
@@ -159,7 +162,7 @@ class SyncController {
   }) async {
     if (_serverUrl.trim().isEmpty) return;
     try {
-      final repo = HttpSyncRepository(serverUrl: _serverUrl.trim());
+      final repo = _syncRepositoryFactory(_serverUrl.trim());
       final urls = await repo.fetchRemoteQueue();
       final succeeded = <String>[];
       for (final url in urls) {

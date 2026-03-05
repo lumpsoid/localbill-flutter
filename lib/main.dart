@@ -10,6 +10,7 @@ import 'features/report/presentation/report_controller.dart';
 import 'features/report/presentation/report_page.dart';
 import 'features/search/presentation/search_controller.dart';
 import 'features/search/presentation/search_page.dart';
+import 'features/shared/data/http_sync_repository.dart';
 import 'features/shared/data/local_queue_repository.dart';
 import 'features/shared/data/local_transaction_repository.dart';
 import 'features/sync/presentation/sync_controller.dart';
@@ -81,6 +82,7 @@ class _CompositionRootState extends State<_CompositionRoot> {
     _syncCtrl = SyncController(
       transactionRepository: _txRepo,
       initialServerUrl: 'http://192.168.1.2:8080',
+      syncRepositoryFactory: (url) => HttpSyncRepository(serverUrl: url),
     );
   }
 
