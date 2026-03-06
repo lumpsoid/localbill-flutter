@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'models/transactions_side_effects.dart';
 import 'models/transactions_state.dart';
+import 'transaction_detail_page.dart';
 import 'transactions_controller.dart';
 
 class TransactionsPage extends StatefulWidget {
@@ -78,6 +79,11 @@ class _TransactionsPageState extends State<TransactionsPage> {
                 final item = state.items[i];
                 return _TransactionTile(
                   item: item,
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => TransactionDetailPage(item: item),
+                    ),
+                  ),
                   onDelete: () => widget.controller
                       .onDeleteTransaction(item.id, item.name),
                 );
@@ -93,10 +99,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
 class _TransactionTile extends StatelessWidget {
   const _TransactionTile({
     required this.item,
+    required this.onTap,
     required this.onDelete,
   });
 
   final dynamic item; // TransactionUiItem
+  final VoidCallback onTap;
   final VoidCallback onDelete;
 
   @override
@@ -117,6 +125,7 @@ class _TransactionTile extends StatelessWidget {
           ),
         ],
       ),
+      onTap: onTap,
       onLongPress: () => _confirmDelete(context),
     );
   }
